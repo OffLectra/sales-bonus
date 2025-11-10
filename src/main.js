@@ -3,7 +3,9 @@ function calculateSimpleRevenue(purchase, _product) {
     const { discount, sale_price, quantity } = purchase;
     const discountMultiplier = 1 - (discount / 100);
     const revenue = sale_price * quantity * discountMultiplier;
-    return revenue;
+    
+    // Округляем как в тестах - до 2 знаков через математическое округление
+    return Math.round(revenue * 100) / 100;
 }
 
 // Функция расчета бонуса на основе позиции в рейтинге
@@ -69,7 +71,7 @@ function analyzeSalesData(data, options) {
         return result;
     }, {});
 
-    // Обработка чеков и расчет метрик (без промежуточного округления)
+    // Обработка чеков - округляем КАЖДЫЙ расчет выручки
     data.purchase_records.forEach(record => {
         const seller = sellerIndex[record.seller_id];
         if (!seller) return;
@@ -80,8 +82,9 @@ function analyzeSalesData(data, options) {
             const product = productIndex[item.sku];
             if (!product) return;
 
-            const cost = product.purchase_price * item.quantity;
+            // Расчет выручки с округлением каждого товара
             const revenue = calculateRevenue(item, product);
+            const cost = product.purchase_price * item.quantity;
             const profit = revenue - cost;
 
             seller.revenue += revenue;
@@ -107,7 +110,7 @@ function analyzeSalesData(data, options) {
             .slice(0, 10);
     });
 
-    // Формирование итогового отчета с финальным округлением
+    // Финальное округление всех числовых полей
     return sellerStats.map(seller => ({
         seller_id: seller.id,
         name: seller.name,
