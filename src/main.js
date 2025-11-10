@@ -1,11 +1,14 @@
 // Функция расчета выручки для одного товара
 function calculateSimpleRevenue(purchase, _product) {
     const { discount, sale_price, quantity } = purchase;
-    const discountMultiplier = 1 - (discount / 100);
-    const revenue = sale_price * quantity * discountMultiplier;
     
-    // Округляем через математическое округление (более стабильное)
-    return Math.round(revenue * 100) / 100;
+    // Точный расчет через умножение на 100 (избегаем float ошибок)
+    const totalCents = sale_price * quantity * 100;
+    const discountAmount = totalCents * discount / 100;
+    const revenueCents = totalCents - discountAmount;
+    
+    // Округление до целых копеек и преобразование обратно
+    return Math.round(revenueCents) / 100;
 }
 
 // Функция расчета бонуса на основе позиции в рейтинге
@@ -13,6 +16,7 @@ function calculateBonusByProfit(index, total, seller) {
     const { profit } = seller;
     const position = index + 1;
 
+    // Работа с profit как есть (уже округленным в analyzeSalesData)
     let bonus;
     if (position === 1) {
         bonus = profit * 0.15;
@@ -24,7 +28,6 @@ function calculateBonusByProfit(index, total, seller) {
         bonus = profit * 0.05;
     }
     
-    // Округляем бонус
     return Math.round(bonus * 100) / 100;
 }
 
@@ -75,7 +78,7 @@ function analyzeSalesData(data, options) {
         return result;
     }, {});
 
-    // Обработка чеков - БЕЗ промежуточного округления для накопления
+    // Обработка чеков - ОКРУГЛЕНИЕ КАЖДОГО ТОВАРА
     data.purchase_records.forEach(record => {
         const seller = sellerIndex[record.seller_id];
         if (!seller) return;
@@ -86,13 +89,18 @@ function analyzeSalesData(data, options) {
             const product = productIndex[item.sku];
             if (!product) return;
 
-            // Расчет БЕЗ промежуточного округления
-            const revenue = calculateRevenue(item, product);
-            const cost = product.purchase_price * item.quantity;
-            const profit = revenue - cost;
+            // Расчет выручки для товара (уже округленная в calculateSimpleRevenue)
+            const itemRevenue = calculateRevenue(item, product);
+            
+            // Расчет себестоимости с округлением
+            const itemCost = Math.round(product.purchase_price * item.quantity * 100) / 100;
+            
+            // Расчет прибыли для товара с округлением
+            const itemProfit = Math.round((itemRevenue - itemCost) * 100) / 100;
 
-            seller.revenue += revenue;
-            seller.profit += profit;
+            // Накопление с округлением на каждом шаге
+            seller.revenue = Math.round((seller.revenue + itemRevenue) * 100) / 100;
+            seller.profit = Math.round((seller.profit + itemProfit) * 100) / 100;
 
             if (!seller.products_sold[item.sku]) {
                 seller.products_sold[item.sku] = 0;
@@ -104,8 +112,9 @@ function analyzeSalesData(data, options) {
     // Сортировка продавцов по прибыли (убывание)
     sellerStats.sort((sellerA, sellerB) => sellerB.profit - sellerA.profit);
 
-    // Расчет бонусов и формирование топа товаров
+    // Расчет бонусов - передаем УЖЕ ОКРУГЛЕННУЮ прибыль
     sellerStats.forEach((seller, index) => {
+        // Прибыль уже округлена в цикле выше
         seller.bonus = calculateBonus(index, sellerStats.length, seller);
         
         seller.top_products = Object.entries(seller.products_sold)
@@ -114,14 +123,14 @@ function analyzeSalesData(data, options) {
             .slice(0, 10);
     });
 
-    // Финальное округление ВСЕХ числовых полей
+    // Финальное округление (хотя все уже округлено)
     return sellerStats.map(seller => ({
         seller_id: seller.id,
         name: seller.name,
-        revenue: Math.round(seller.revenue * 100) / 100,
-        profit: Math.round(seller.profit * 100) / 100,
+        revenue: seller.revenue, // Уже округлено
+        profit: seller.profit,   // Уже округлено
         sales_count: seller.sales_count,
         top_products: seller.top_products,
-        bonus: Math.round(seller.bonus * 100) / 100
+        bonus: seller.bonus      // Уже округлено в calculateBonusByProfit
     }));
 }
