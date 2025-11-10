@@ -69,17 +69,17 @@ function analyzeSalesData(data, options) {
         return result;
     }, {});
 
-    // Обработка чеков - ИСПОЛЬЗУЕМ ГОТОВЫЕ ПОЛЯ ИЗ ЧЕКОВ
+    // Обработка чеков - ВЫРУЧКА ИЗ ГОТОВОГО ПОЛЯ
     data.purchase_records.forEach(record => {
         const seller = sellerIndex[record.seller_id];
         if (!seller) return;
 
         seller.sales_count += 1;
         
-        // ВЫРУЧКА: используем готовое поле total_amount МИНУС total_discount
-        seller.revenue += record.total_amount - record.total_discount;
+        // ВЫРУЧКА: используем готовое поле total_amount (сумма чека БЕЗ скидки)
+        seller.revenue += record.total_amount;
 
-        // Для прибыли и топа товаров все равно обрабатываем каждый товар
+        // Для прибыли и топа товаров обрабатываем каждый товар
         record.items.forEach(item => {
             const product = productIndex[item.sku];
             if (!product) return;
@@ -90,7 +90,7 @@ function analyzeSalesData(data, options) {
             // Расчет выручки для этого товара (только для прибыли)
             const revenue = calculateRevenue(item, product);
             
-            // Прибыль = выручка - себестоимость
+            // Прибыль = выручка с учетом скидки - себестоимость
             const profit = revenue - cost;
             
             seller.profit += profit;
