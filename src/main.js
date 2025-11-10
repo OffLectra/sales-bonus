@@ -1,14 +1,9 @@
 // Функция расчета выручки для одного товара
 function calculateSimpleRevenue(purchase, _product) {
     const { discount, sale_price, quantity } = purchase;
-    
-    // Точный расчет через умножение на 100 (избегаем float ошибок)
-    const totalCents = sale_price * quantity * 100;
-    const discountAmount = totalCents * discount / 100;
-    const revenueCents = totalCents - discountAmount;
-    
-    // Округление до целых копеек и преобразование обратно
-    return Math.round(revenueCents) / 100;
+    const discountMultiplier = 1 - (discount / 100);
+    const revenue = sale_price * quantity * discountMultiplier;
+    return revenue;
 }
 
 // Функция расчета бонуса на основе позиции в рейтинге
@@ -16,19 +11,15 @@ function calculateBonusByProfit(index, total, seller) {
     const { profit } = seller;
     const position = index + 1;
 
-    // Работа с profit как есть (уже округленным в analyzeSalesData)
-    let bonus;
     if (position === 1) {
-        bonus = profit * 0.15;
+        return profit * 0.15;
     } else if (position === 2 || position === 3) {
-        bonus = profit * 0.10;
+        return profit * 0.10;
     } else if (position === total) {
-        bonus = 0;
+        return 0;
     } else {
-        bonus = profit * 0.05;
+        return profit * 0.05;
     }
-    
-    return Math.round(bonus * 100) / 100;
 }
 
 // Главная функция анализа данных о продажах
@@ -78,30 +69,33 @@ function analyzeSalesData(data, options) {
         return result;
     }, {});
 
-    // Обработка чеков - ОКРУГЛЕНИЕ КАЖДОГО ТОВАРА
+    // Обработка чеков - ИСПОЛЬЗУЕМ ГОТОВЫЕ ПОЛЯ ИЗ ЧЕКОВ
     data.purchase_records.forEach(record => {
         const seller = sellerIndex[record.seller_id];
         if (!seller) return;
 
         seller.sales_count += 1;
+        
+        // ВЫРУЧКА: используем готовое поле total_amount МИНУС total_discount
+        seller.revenue += record.total_amount - record.total_discount;
 
+        // Для прибыли и топа товаров все равно обрабатываем каждый товар
         record.items.forEach(item => {
             const product = productIndex[item.sku];
             if (!product) return;
 
-            // Расчет выручки для товара (уже округленная в calculateSimpleRevenue)
-            const itemRevenue = calculateRevenue(item, product);
+            // Расчет себестоимости товара
+            const cost = product.purchase_price * item.quantity;
             
-            // Расчет себестоимости с округлением
-            const itemCost = Math.round(product.purchase_price * item.quantity * 100) / 100;
+            // Расчет выручки для этого товара (только для прибыли)
+            const revenue = calculateRevenue(item, product);
             
-            // Расчет прибыли для товара с округлением
-            const itemProfit = Math.round((itemRevenue - itemCost) * 100) / 100;
+            // Прибыль = выручка - себестоимость
+            const profit = revenue - cost;
+            
+            seller.profit += profit;
 
-            // Накопление с округлением на каждом шаге
-            seller.revenue = Math.round((seller.revenue + itemRevenue) * 100) / 100;
-            seller.profit = Math.round((seller.profit + itemProfit) * 100) / 100;
-
+            // Учет проданных товаров для топа
             if (!seller.products_sold[item.sku]) {
                 seller.products_sold[item.sku] = 0;
             }
@@ -112,9 +106,8 @@ function analyzeSalesData(data, options) {
     // Сортировка продавцов по прибыли (убывание)
     sellerStats.sort((sellerA, sellerB) => sellerB.profit - sellerA.profit);
 
-    // Расчет бонусов - передаем УЖЕ ОКРУГЛЕННУЮ прибыль
+    // Расчет бонусов и формирование топа товаров
     sellerStats.forEach((seller, index) => {
-        // Прибыль уже округлена в цикле выше
         seller.bonus = calculateBonus(index, sellerStats.length, seller);
         
         seller.top_products = Object.entries(seller.products_sold)
@@ -123,14 +116,14 @@ function analyzeSalesData(data, options) {
             .slice(0, 10);
     });
 
-    // Финальное округление (хотя все уже округлено)
+    // Финальное округление через toFixed(2)
     return sellerStats.map(seller => ({
         seller_id: seller.id,
         name: seller.name,
-        revenue: seller.revenue, // Уже округлено
-        profit: seller.profit,   // Уже округлено
+        revenue: +(seller.revenue.toFixed(2)),
+        profit: +(seller.profit.toFixed(2)),
         sales_count: seller.sales_count,
         top_products: seller.top_products,
-        bonus: seller.bonus      // Уже округлено в calculateBonusByProfit
+        bonus: +(seller.bonus.toFixed(2))
     }));
 }
