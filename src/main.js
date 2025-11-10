@@ -3,7 +3,9 @@ function calculateSimpleRevenue(purchase, _product) {
     const { discount, sale_price, quantity } = purchase;
     const discountMultiplier = 1 - (discount / 100);
     const revenue = sale_price * quantity * discountMultiplier;
-    return revenue;
+    
+    // Математическое округление вместо toFixed
+    return Math.round(revenue * 100) / 100;
 }
 
 // Функция расчета бонуса на основе позиции в рейтинге
