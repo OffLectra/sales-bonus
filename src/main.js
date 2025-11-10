@@ -4,7 +4,7 @@ function calculateSimpleRevenue(purchase, _product) {
     const discountMultiplier = 1 - (discount / 100);
     const revenue = sale_price * quantity * discountMultiplier;
     
-    // Округляем как в тестах - до 2 знаков через математическое округление
+    // Округляем через математическое округление (более стабильное)
     return Math.round(revenue * 100) / 100;
 }
 
@@ -13,15 +13,19 @@ function calculateBonusByProfit(index, total, seller) {
     const { profit } = seller;
     const position = index + 1;
 
+    let bonus;
     if (position === 1) {
-        return profit * 0.15;
+        bonus = profit * 0.15;
     } else if (position === 2 || position === 3) {
-        return profit * 0.10;
+        bonus = profit * 0.10;
     } else if (position === total) {
-        return 0;
+        bonus = 0;
     } else {
-        return profit * 0.05;
+        bonus = profit * 0.05;
     }
+    
+    // Округляем бонус
+    return Math.round(bonus * 100) / 100;
 }
 
 // Главная функция анализа данных о продажах
@@ -71,7 +75,7 @@ function analyzeSalesData(data, options) {
         return result;
     }, {});
 
-    // Обработка чеков - округляем КАЖДЫЙ расчет выручки
+    // Обработка чеков - БЕЗ промежуточного округления для накопления
     data.purchase_records.forEach(record => {
         const seller = sellerIndex[record.seller_id];
         if (!seller) return;
@@ -82,7 +86,7 @@ function analyzeSalesData(data, options) {
             const product = productIndex[item.sku];
             if (!product) return;
 
-            // Расчет выручки с округлением каждого товара
+            // Расчет БЕЗ промежуточного округления
             const revenue = calculateRevenue(item, product);
             const cost = product.purchase_price * item.quantity;
             const profit = revenue - cost;
@@ -110,7 +114,7 @@ function analyzeSalesData(data, options) {
             .slice(0, 10);
     });
 
-    // Финальное округление всех числовых полей
+    // Финальное округление ВСЕХ числовых полей
     return sellerStats.map(seller => ({
         seller_id: seller.id,
         name: seller.name,
